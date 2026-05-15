@@ -2,20 +2,27 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ProductPurchase } from './entities/product-purchase.entity';
+import { UserRole } from '../users/entities/user.entity';
+
 
 @Injectable()
 export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private readonly productsRepository: Repository<Product>,
-  ) {}
+    @InjectRepository(ProductPurchase)
+    private readonly productPurchasesRepository: Repository<ProductPurchase>,
+    private readonly dataSource: DataSource,
+  ) { }
 
   async create(createProductDto: CreateProductDto, sellerId: string): Promise<Product> {
     const product = this.productsRepository.create({
@@ -77,5 +84,40 @@ export class ProductsService {
 
     await this.productsRepository.remove(product);
     return { message: 'Product deleted successfully' };
+  }
+
+
+  async buyProduct(
+    productId: string,
+    quantity: number,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<ProductPurchase> {
+    if (userRole === UserRole.SELLER) {
+      throw new ForbiddenException('Sellers cannot buy products');
+    }
+
+    const product = await this.findOne(productId);
+    if (product.stock < quantity) {
+      throw new BadRequestException(
+        `Not enough stock. Available: ${product.stock}`,
+      );
+    }
+    const totalPrice = product.price * quantity;
+
+    const purchase = await this.dataSource.transaction(async (manager) => {
+      product.stock -= quantity;
+      await manager.save(product);
+
+      const newPurchase = manager.create(ProductPurchase, {
+        userId,
+        productId,
+        quantity,
+        totalPrice,
+      });
+      return manager.save(newPurchase);
+    });
+
+    return purchase;
   }
 }

@@ -12,6 +12,7 @@ import {
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { BuyProductDto } from './dto/buy-product.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/entities/user.entity';
@@ -33,7 +34,7 @@ export class ProductsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const result = await this.productsService.findOne(id);
-    
+
     return {
       success: true,
       message: 'Product fetched successfully',
@@ -86,6 +87,26 @@ export class ProductsController {
     return {
       success: true,
       message: 'Product deleted successfully',
+      data: result,
+    };
+  }
+
+
+  @Post(':id/buy')
+  async buyProduct(
+    @Param('id') id: string,
+    @Body() buyProductDto: BuyProductDto,
+    @CurrentUser() user: { id: string; role: UserRole },
+  ) {
+    const result = await this.productsService.buyProduct(
+      id,
+      buyProductDto.quantity,
+      user.id,
+      user.role,
+    );
+    return {
+      success: true,
+      message: 'Product purchased successfully',
       data: result,
     };
   }
