@@ -7,23 +7,37 @@ import {
   Body,
   Param,
   Query,
-  ForbiddenException,
+  UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductFilterDto } from './dto/product-filter.dto';
 import { BuyProductDto } from './dto/buy-product.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { SellerGuard } from '../../common/guards/seller.guard';
+import { CategoryValidationPipe } from '../../common/pipes/category-validation.pipe';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) { }
+  constructor(private readonly productsService: ProductsService) {}
+
+  @Get('categories')
+  async findAllCategories() {
+    const result = await this.productsService.findAllCategories();
+    return {
+      success: true,
+      message: 'Categories fetched successfully',
+      data: result,
+    };
+  }
 
   @Get()
-  async findAll(@Query() paginationDto: PaginationDto) {
-    const result = await this.productsService.findAll(paginationDto);
+  async findAll(
+    @Query(CategoryValidationPipe) filterDto: ProductFilterDto,
+  ) {
+    const result = await this.productsService.findAll(filterDto);
     return {
       success: true,
       message: 'Products fetched successfully',
@@ -34,7 +48,6 @@ export class ProductsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const result = await this.productsService.findOne(id);
-
     return {
       success: true,
       message: 'Product fetched successfully',
@@ -42,14 +55,13 @@ export class ProductsController {
     };
   }
 
+
   @Post()
+  @UseGuards(SellerGuard)
   async create(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
-    if (user.role !== UserRole.SELLER) {
-      throw new ForbiddenException('Only sellers can create products');
-    }
     const result = await this.productsService.create(createProductDto, user.id);
     return {
       success: true,
@@ -57,16 +69,15 @@ export class ProductsController {
       data: result,
     };
   }
+  
 
   @Patch(':id')
+  @UseGuards(SellerGuard)
   async update(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
-    if (user.role !== UserRole.SELLER) {
-      throw new ForbiddenException('Only sellers can update products');
-    }
     const result = await this.productsService.update(id, updateProductDto, user.id);
     return {
       success: true,
@@ -75,14 +86,13 @@ export class ProductsController {
     };
   }
 
+
   @Delete(':id')
+  @UseGuards(SellerGuard)
   async remove(
     @Param('id') id: string,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
-    if (user.role !== UserRole.SELLER) {
-      throw new ForbiddenException('Only sellers can delete products');
-    }
     const result = await this.productsService.remove(id, user.id);
     return {
       success: true,
