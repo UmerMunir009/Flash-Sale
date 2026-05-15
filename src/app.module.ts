@@ -11,9 +11,19 @@ import databaseConfig from './config/database.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProductsModule } from './modules/products/products.module';
+import { DealsModule } from './modules/deals/deals.module';
+import { WorkersModule } from './workers/workers.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 
 import { AuthMiddleware } from './common/middleware/auth.middleware';
 import { JwtModule } from '@nestjs/jwt';
+import { BullModule } from '@nestjs/bullmq';
+
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { QUEUES } from './common/constants/queue.constants';
+
 
 @Module({
   imports: [
@@ -46,11 +56,42 @@ import { JwtModule } from '@nestjs/jwt';
       }),
     }),
 
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get<string>('REDIS_HOST'),
+          port: config.get<number>('REDIS_PORT'),
+        },
+      }),
+    }),
+
+
     UsersModule,
     AuthModule,
     ProductsModule,
+    DealsModule,
+    WorkersModule,
+    PurchasesModule,
+
+    BullBoardModule.forRoot({
+      route: '/queues',
+      adapter: ExpressAdapter,
+    }),
+
+    BullBoardModule.forFeature({
+      name: QUEUES.DEAL_ACTIVATION,
+      adapter: BullMQAdapter,
+    }),
+
+    BullBoardModule.forFeature({
+      name: QUEUES.DEAL_EXPIRY,
+      adapter: BullMQAdapter,
+    }),
+
   ],
 })
+
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer

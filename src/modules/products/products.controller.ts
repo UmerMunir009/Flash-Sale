@@ -18,39 +18,47 @@ import { UserRole } from '../users/entities/user.entity';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly productsService: ProductsService) { }
 
   @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.productsService.findAll(paginationDto);
-    // return {
-    //   success: true,
-    //   message: 'Products Found',
-    //   data: result,
-    // };
+  async findAll(@Query() paginationDto: PaginationDto) {
+    const result = await this.productsService.findAll(paginationDto);
+    return {
+      success: true,
+      message: 'Products fetched successfully',
+      data: result,
+    };
   }
 
-  // PUBLIC — anyone can view a single product
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const result = await this.productsService.findOne(id);
+    
+    return {
+      success: true,
+      message: 'Product fetched successfully',
+      data: result,
+    };
   }
 
-  // SELLER ONLY — create product
   @Post()
-  create(
+  async create(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
     if (user.role !== UserRole.SELLER) {
       throw new ForbiddenException('Only sellers can create products');
     }
-    return this.productsService.create(createProductDto, user.id);
+    const result = await this.productsService.create(createProductDto, user.id);
+    return {
+      success: true,
+      message: 'Product created successfully',
+      data: result,
+    };
   }
 
-  // SELLER ONLY — update own product
   @Patch(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
     @CurrentUser() user: { id: string; role: UserRole },
@@ -58,18 +66,27 @@ export class ProductsController {
     if (user.role !== UserRole.SELLER) {
       throw new ForbiddenException('Only sellers can update products');
     }
-    return this.productsService.update(id, updateProductDto, user.id);
+    const result = await this.productsService.update(id, updateProductDto, user.id);
+    return {
+      success: true,
+      message: 'Product updated successfully',
+      data: result,
+    };
   }
 
-  // SELLER ONLY — delete own product
   @Delete(':id')
-  remove(
+  async remove(
     @Param('id') id: string,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
     if (user.role !== UserRole.SELLER) {
       throw new ForbiddenException('Only sellers can delete products');
     }
-    return this.productsService.remove(id, user.id);
+    const result = await this.productsService.remove(id, user.id);
+    return {
+      success: true,
+      message: 'Product deleted successfully',
+      data: result,
+    };
   }
 }

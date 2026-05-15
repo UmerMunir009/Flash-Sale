@@ -20,11 +20,12 @@ export class AuthMiddleware implements NestMiddleware {
       next();
       return;
     }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('No token provided');
     }
-         
+
     const token = authHeader.split(' ')[1];
 
     try {
@@ -46,14 +47,18 @@ export class AuthMiddleware implements NestMiddleware {
 
   private isPublicRoute(req: Request): boolean {
     const publicRoutes = [
-      { path: '/api/v1/auth/register', method: 'POST' },
-      { path: '/api/v1/auth/login', method: 'POST' },
-      { path: '/api/v1/products', method: 'GET' },
+      { pattern: /^\/api\/v1\/auth\/register$/, method: 'POST' },
+      { pattern: /^\/api\/v1\/auth\/login$/, method: 'POST' },
+      { pattern: /^\/api\/v1\/products$/, method: 'GET' },
+      { pattern: /^\/api\/v1\/products\/[^/]+$/, method: 'GET' },
+      { pattern: /^\/api\/v1\/deals$/, method: 'GET' },
+      { pattern: /^\/api\/v1\/deals\/[0-9a-f-]{36}$/, method: 'GET' },
+      // { pattern: /^\/api\/v1\/deals\/[^/]+$/, method: 'GET' },    
     ];
 
     return publicRoutes.some(
       (route) =>
-        req.path === route.path && req.method === route.method,
+        route.pattern.test(req.path) && req.method === route.method,
     );
   }
 }

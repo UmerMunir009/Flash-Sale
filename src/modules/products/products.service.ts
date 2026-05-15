@@ -60,7 +60,6 @@ export class ProductsService {
   async update(id: string, updateProductDto: UpdateProductDto, sellerId: string): Promise<Product> {
     const product = await this.findOne(id);
 
-    // only the seller who created it can update
     if (product.sellerId !== sellerId) {
       throw new ForbiddenException('You can only update your own products');
     }
