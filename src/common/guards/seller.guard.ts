@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-
+//yo
 @Injectable()
 export class SellerGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
