@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { Deal, DealStatus } from '../modules/deals/entities/deal.entity';
 import { QUEUES } from '../common/constants/queue.constants';
+import { RedisService } from '../common/services/redis.service';
+import { CACHE_KEYS } from '../common/constants/cache.constants';
 
 @Processor(QUEUES.DEAL_EXPIRY)
 export class DealExpiryProcessor extends WorkerHost {
@@ -13,13 +15,14 @@ export class DealExpiryProcessor extends WorkerHost {
   constructor(
     @InjectRepository(Deal)
     private readonly dealsRepository: Repository<Deal>,
+    private readonly redisService: RedisService,
   ) {
     super();
   }
 
   async process(job: Job): Promise<void> {
     const { dealId } = job.data;
-    this.logger.log(` Expiring deal: ${dealId}`);
+    this.logger.log(`Expiring deal: ${dealId}`);
 
     const deal = await this.dealsRepository.findOne({ where: { id: dealId } });
 
@@ -35,6 +38,10 @@ export class DealExpiryProcessor extends WorkerHost {
 
     deal.status = DealStatus.EXPIRED;
     await this.dealsRepository.save(deal);
-    this.logger.log(`Deal ${dealId} is now EXPIRED`);
+
+    const keys = await this.redisService.keys(`${CACHE_KEYS.ACTIVE_DEALS}*`);
+    await Promise.all(keys.map((key) => this.redisService.del(key)));
+
+    this.logger.log(`Deal ${dealId} is now EXPIRED cache deleted for active deals`);
   }
 }

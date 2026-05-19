@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { Deal, DealStatus } from '../modules/deals/entities/deal.entity';
 import { QUEUES } from '../common/constants/queue.constants';
+import { RedisService } from '../common/services/redis.service';
+import { CACHE_KEYS } from '../common/constants/cache.constants';
 
 @Processor(QUEUES.DEAL_ACTIVATION)
 export class DealActivationProcessor extends WorkerHost {
@@ -13,6 +15,7 @@ export class DealActivationProcessor extends WorkerHost {
   constructor(
     @InjectRepository(Deal)
     private readonly dealsRepository: Repository<Deal>,
+    private readonly redisService: RedisService,
   ) {
     super();
   }
@@ -35,6 +38,10 @@ export class DealActivationProcessor extends WorkerHost {
 
     deal.status = DealStatus.ACTIVE;
     await this.dealsRepository.save(deal);
-    this.logger.log(`Deal ${dealId} is now ACTIVE`);
+
+    const keys = await this.redisService.keys(`${CACHE_KEYS.ACTIVE_DEALS}*`);
+    await Promise.all(keys.map((key) => this.redisService.del(key)));
+
+    this.logger.log(`Deal ${dealId} is now ACTIVE cache deleted for active deals`);
   }
 }

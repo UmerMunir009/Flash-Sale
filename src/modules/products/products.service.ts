@@ -12,8 +12,9 @@ import { Category } from './entities/category.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
 import { UserRole } from '../users/entities/user.entity';
+import { RedisService } from '../../common/services/redis.service';
+import { CACHE_KEYS } from '../../common/constants/cache.constants';
 
 @Injectable()
 export class ProductsService {
@@ -25,6 +26,7 @@ export class ProductsService {
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     private readonly dataSource: DataSource,
+    private readonly redisService: RedisService,
   ) {}
 
   async create(createProductDto: CreateProductDto, sellerId: string): Promise<Product> {
@@ -32,16 +34,18 @@ export class ProductsService {
       const category = await this.categoryRepository.findOne({
         where: { id: createProductDto.categoryId },
       });
-      if (!category) {
-        throw new NotFoundException('Category not found');
-      }
+      if (!category) throw new NotFoundException('Category not found');
     }
 
     const product = this.productsRepository.create({
       ...createProductDto,
       sellerId,
     });
-    return this.productsRepository.save(product);
+    const saved = await this.productsRepository.save(product);
+
+    await this.invalidateProductsCache();
+
+    return saved;
   }
 
   async findAll(filterDto: ProductFilterDto): Promise<{
@@ -53,6 +57,13 @@ export class ProductsService {
   }> {
     const { limit, skip, page, search, categoryId } = filterDto;
 
+    const cacheKey = `${CACHE_KEYS.ALL_PRODUCTS}:page=${page}:limit=${limit}:search=${search || ''}:category=${categoryId || ''}`;
+
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      console.log('returning from cache');
+      return cached as any;
+    }
     const query = this.productsRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category')
@@ -72,13 +83,18 @@ export class ProductsService {
 
     const [data, total] = await query.getManyAndCount();
 
-    return {
+    const result = {
       data,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+
+    await this.redisService.set(cacheKey, result, 300);
+    console.log('saved to cache');
+
+    return result;
   }
 
   async findOne(id: string): Promise<Product> {
@@ -86,16 +102,12 @@ export class ProductsService {
       where: { id },
       relations: ['category'],
     });
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
+    if (!product) throw new NotFoundException('Product not found');
     return product;
   }
 
   async findAllCategories(): Promise<Category[]> {
-    return this.categoryRepository.find({
-      order: { name: 'ASC' },
-    });
+    return this.categoryRepository.find({ order: { name: 'ASC' } });
   }
 
   async update(
@@ -108,7 +120,11 @@ export class ProductsService {
       throw new ForbiddenException('You can only update your own products');
     }
     Object.assign(product, updateProductDto);
-    return this.productsRepository.save(product);
+    const updated = await this.productsRepository.save(product);
+
+    await this.invalidateProductsCache();
+
+    return updated;
   }
 
   async remove(id: string, sellerId: string): Promise<{ message: string }> {
@@ -117,6 +133,9 @@ export class ProductsService {
       throw new ForbiddenException('You can only delete your own products');
     }
     await this.productsRepository.remove(product);
+
+    await this.invalidateProductsCache();
+
     return { message: 'Product deleted successfully' };
   }
 
@@ -131,7 +150,9 @@ export class ProductsService {
     }
     const product = await this.findOne(productId);
     if (product.stock < quantity) {
-      throw new BadRequestException(`Not enough stock. Available: ${product.stock}`);
+      throw new BadRequestException(
+        `Not enough stock. Available: ${product.stock}`,
+      );
     }
     const totalPrice = product.price * quantity;
     const purchase = await this.dataSource.transaction(async (manager) => {
@@ -145,6 +166,17 @@ export class ProductsService {
       });
       return manager.save(newPurchase);
     });
+
+    await this.invalidateProductsCache();
+
     return purchase;
+  }
+
+  private async invalidateProductsCache(): Promise<void> {
+    const keys = await this.redisService.keys(
+      `${CACHE_KEYS.ALL_PRODUCTS}*`,
+    );
+    await Promise.all(keys.map((key) => this.redisService.del(key)));
+    console.log(`invalidated ${keys.length} cache key(s)`);
   }
 }

@@ -24,6 +24,10 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { QUEUES } from './common/constants/queue.constants';
 
+import { RedisModule } from './common/services/redis.module';
+
+
+
 
 @Module({
   imports: [
@@ -65,7 +69,7 @@ import { QUEUES } from './common/constants/queue.constants';
         },
       }),
     }),
-
+    RedisModule,
 
     UsersModule,
     AuthModule,

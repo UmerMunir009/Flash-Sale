@@ -14,7 +14,8 @@ import { UpdateDealDto } from './dto/update-deal.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ProductsService } from '../products/products.service';
 import { QUEUES, JOBS } from '../../common/constants/queue.constants';
-
+import { RedisService } from '../../common/services/redis.service';
+import { CACHE_KEYS } from '../../common/constants/cache.constants';
 
 @Injectable()
 export class DealsService {
@@ -26,6 +27,7 @@ export class DealsService {
     private readonly activationQueue: Queue,
     @InjectQueue(QUEUES.DEAL_EXPIRY)
     private readonly expiryQueue: Queue,
+    private readonly redisService: RedisService,
   ) {}
 
   async create(createDealDto: CreateDealDto, sellerId: string): Promise<Deal> {
@@ -36,7 +38,6 @@ export class DealsService {
       throw new ForbiddenException('You can only create deals for your own products');
     }
 
-    // validate time range
     const start = new Date(startTime);
     const end = new Date(endTime);
     if (end <= start) {
@@ -65,11 +66,8 @@ export class DealsService {
       { dealId: savedDeal.id },
       {
         delay: activationDelay,
-        attempts: 3,      
-        backoff: {
-          type: 'exponential',
-          delay: 5000,      
-        },
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
       },
     );
 
@@ -79,17 +77,13 @@ export class DealsService {
       {
         delay: expiryDelay,
         attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
+        backoff: { type: 'exponential', delay: 5000 },
       },
     );
 
     return savedDeal;
   }
 
-  
   async findActiveDeals(paginationDto: PaginationDto): Promise<{
     data: Deal[];
     total: number;
@@ -99,6 +93,14 @@ export class DealsService {
   }> {
     const { limit, skip, page } = paginationDto;
 
+    const cacheKey = `${CACHE_KEYS.ACTIVE_DEALS}:page=${page}:limit=${limit}`;
+
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      console.log('returning active deals from cache');
+      return cached as any;
+    }
+
     const [data, total] = await this.dealsRepository.findAndCount({
       where: { status: DealStatus.ACTIVE },
       relations: ['product'],
@@ -107,13 +109,18 @@ export class DealsService {
       skip,
     });
 
-    return {
+    const result = {
       data,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
     };
+
+    await this.redisService.set(cacheKey, result, 300);
+    console.log('saved active deals to cache');
+
+    return result;
   }
 
   async findMyDeals(sellerId: string, paginationDto: PaginationDto): Promise<{
@@ -124,7 +131,6 @@ export class DealsService {
     totalPages: number;
   }> {
     const { limit, skip, page } = paginationDto;
-
     const [data, total] = await this.dealsRepository.findAndCount({
       where: { sellerId },
       relations: ['product'],
@@ -133,33 +139,37 @@ export class DealsService {
       skip,
     });
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: string): Promise<Deal> {
+    const cacheKey = CACHE_KEYS.DEAL(id);
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      console.log(`returning deal ${id} from cache`);
+      return cached as Deal;
+    }
+
     const deal = await this.dealsRepository.findOne({
       where: { id },
       relations: ['product'],
     });
-    if (!deal) {
-      throw new NotFoundException('Deal not found');
-    }
+    if (!deal) throw new NotFoundException('Deal not found');
+
+    await this.redisService.set(cacheKey, deal, 300);
     return deal;
   }
 
-  async update(id: string, updateDealDto: UpdateDealDto, sellerId: string): Promise<Deal> {
+  async update(
+    id: string,
+    updateDealDto: UpdateDealDto,
+    sellerId: string,
+  ): Promise<Deal> {
     const deal = await this.findOne(id);
 
     if (deal.sellerId !== sellerId) {
       throw new ForbiddenException('You can only update your own deals');
     }
-
     if (deal.status !== DealStatus.PENDING) {
       throw new BadRequestException('Only pending deals can be updated');
     }
@@ -172,7 +182,9 @@ export class DealsService {
       throw new BadRequestException('end_time must be after start_time');
     }
 
-    return this.dealsRepository.save(deal);
+    const updated = await this.dealsRepository.save(deal);
+
+    return updated;
   }
 
   async remove(id: string, sellerId: string): Promise<{ message: string }> {
@@ -181,12 +193,21 @@ export class DealsService {
     if (deal.sellerId !== sellerId) {
       throw new ForbiddenException('You can only delete your own deals');
     }
-
     if (deal.status === DealStatus.ACTIVE) {
       throw new BadRequestException('Cannot delete an active deal');
     }
 
     await this.dealsRepository.remove(deal);
+
+    await this.redisService.del(CACHE_KEYS.DEAL(id));
+    console.log(`deleted cache for deal: ${id}`);
+
     return { message: 'Deal deleted successfully' };
+  }
+
+  async invalidateActiveDealsCache(): Promise<void> {
+    const keys = await this.redisService.keys(`${CACHE_KEYS.ACTIVE_DEALS}*`);
+    await Promise.all(keys.map((key) => this.redisService.del(key)));
+    console.log(`invalidated ${keys.length} active deals cache key(s)`);
   }
 }
