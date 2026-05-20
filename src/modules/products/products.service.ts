@@ -61,7 +61,6 @@ export class ProductsService {
 
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
-      console.log('returning from cache');
       return cached as any;
     }
     const query = this.productsRepository
@@ -92,7 +91,6 @@ export class ProductsService {
     };
 
     await this.redisService.set(cacheKey, result, 300);
-    console.log('saved to cache');
 
     return result;
   }
@@ -177,6 +175,5 @@ export class ProductsService {
       `${CACHE_KEYS.ALL_PRODUCTS}*`,
     );
     await Promise.all(keys.map((key) => this.redisService.del(key)));
-    console.log(`invalidated ${keys.length} cache key(s)`);
   }
 }
