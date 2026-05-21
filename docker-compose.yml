@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15-alpine    
+    container_name: flash_sale_db
+    restart: unless-stopped         
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flash_sale_db
+    ports:
+      - '5433:5432'                  
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+      - ./src/database/migrations:/docker-entrypoint-initdb.d 
+    networks:
+      - flash_sale_network
+
+  redis:
+    image: redis:7-alpine           
+    container_name: flash_sale_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data           
+    networks:
+      - flash_sale_network
+
+  app:
+    build:
+      context: .                 
+      dockerfile: Dockerfile
+    container_name: flash_sale_app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DB_HOST: postgres              # service name defined above, not localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: flash_sale_db
+
+      REDIS_HOST: redis             
+      REDIS_PORT: 6379
+
+      JWT_SECRET: flash_db@83792u2949j.
+      PORT: 3000
+    depends_on:
+      - postgres                    
+      - redis               
+    networks:
+      - flash_sale_network
+
+# named volumes persist data even if containers stop
+volumes:
+  postgres_data:
+  redis_data:
+
+# all containers talk to each other on this network
+networks:
+  flash_sale_network:
+    driver: bridge

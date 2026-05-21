@@ -61,6 +61,7 @@ export class ProductsService {
 
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
+      console.log(`Cache hit for key: ${cacheKey}`);
       return cached as any;
     }
     const query = this.productsRepository
@@ -91,6 +92,8 @@ export class ProductsService {
     };
 
     await this.redisService.set(cacheKey, result, 300);
+
+    console.log(`Cache miss for key: ${cacheKey}`);
 
     return result;
   }
