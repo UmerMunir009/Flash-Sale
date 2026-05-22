@@ -14,6 +14,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { DealsModule } from './modules/deals/deals.module';
 import { WorkersModule } from './workers/workers.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 
 import { AuthMiddleware } from './common/middleware/auth.middleware';
 import { JwtModule } from '@nestjs/jwt';
@@ -77,6 +78,7 @@ import { RedisModule } from './common/services/redis.module';
     DealsModule,
     WorkersModule,
     PurchasesModule,
+    WishlistModule,
 
     BullBoardModule.forRoot({
       route: '/queues',

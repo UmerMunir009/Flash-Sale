@@ -3,4 +3,5 @@ export const CACHE_KEYS = {
   PRODUCT: (id: string) => `products:${id}`,
   ACTIVE_DEALS: 'deals:active',
   DEAL: (id: string) => `deals:${id}`,
+  WISHLIST: (userId: string) => `wishlist:${userId}`,
 };
