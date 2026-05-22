@@ -50,7 +50,6 @@ export class WishlistService {
     const wishlist = this.wishlistRepository.create({ userId, productId });
     const saved = await this.wishlistRepository.save(wishlist);
 
-    // invalidate this user's wishlist cache
     await this.invalidateWishlistCache(userId);
 
     return saved;
