@@ -6,9 +6,14 @@ import { Category } from './entities/category.entity';
 import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
 import { CategoryValidationPipe } from '../../common/pipes/category-validation.pipe';
+import { UsersModule } from '../users/users.module';
+import { BullModule } from '@nestjs/bullmq';
+import { QUEUES } from '../../common/constants/queue.constants';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, ProductPurchase, Category])],
+  imports: [TypeOrmModule.forFeature([Product, ProductPurchase, Category]),UsersModule,BullModule.registerQueue(
+      { name: QUEUES.EMAIL },  
+    ),],
   controllers: [ProductsController],
   providers: [ProductsService, CategoryValidationPipe],
   exports: [ProductsService],

@@ -26,6 +26,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { QUEUES } from './common/constants/queue.constants';
 
 import { RedisModule } from './common/services/redis.module';
+import { EmailModule } from './common/services/email.module';
 
 
 
@@ -71,6 +72,7 @@ import { RedisModule } from './common/services/redis.module';
       }),
     }),
     RedisModule,
+    EmailModule,
 
     UsersModule,
     AuthModule,

@@ -14,6 +14,7 @@ import { QUEUES } from '../../common/constants/queue.constants';
     BullModule.registerQueue(
       { name: QUEUES.DEAL_ACTIVATION },
       { name: QUEUES.DEAL_EXPIRY },
+      { name: QUEUES.EMAIL },
     ),
   ],
   controllers: [DealsController],

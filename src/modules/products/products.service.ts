@@ -15,6 +15,14 @@ import { ProductFilterDto } from './dto/product-filter.dto';
 import { UserRole } from '../users/entities/user.entity';
 import { RedisService } from '../../common/services/redis.service';
 import { CACHE_KEYS } from '../../common/constants/cache.constants';
+import { EmailService } from '../../common/services/email.service';
+import { UsersService } from '../users/users.service';
+
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUES, JOBS } from '../../common/constants/queue.constants';
+
+
 
 @Injectable()
 export class ProductsService {
@@ -27,7 +35,11 @@ export class ProductsService {
     private readonly categoryRepository: Repository<Category>,
     private readonly dataSource: DataSource,
     private readonly redisService: RedisService,
-  ) {}
+    private readonly emailService: EmailService,
+    private readonly usersService: UsersService,
+    @InjectQueue(QUEUES.EMAIL)
+    private readonly emailQueue: Queue,
+  ) { }
 
   async create(createProductDto: CreateProductDto, sellerId: string): Promise<Product> {
     if (createProductDto.categoryId) {
@@ -169,6 +181,30 @@ export class ProductsService {
     });
 
     await this.invalidateProductsCache();
+
+    const user = await this.usersService.findById(userId);
+    if (user) {
+      await this.emailQueue.add(
+        JOBS.SEND_PURCHASE_EMAIL,
+        {
+          toEmail: user.email,
+          buyerName: user.name,
+          productName: product.name,
+          quantity,
+          totalPrice,
+        },
+        {
+          attempts: 3,          
+          backoff: {
+            type: 'exponential',
+            delay: 5000,       
+          },
+          removeOnComplete: true, 
+          removeOnFail: false,   
+        },
+      );
+    }
+
 
     return purchase;
   }
